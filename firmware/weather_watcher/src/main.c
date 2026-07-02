@@ -11,6 +11,7 @@
 #include <zephyr/pm/pm.h>
 #include <esp_sleep.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define WIFI_SSID "YOUR_HOME_WIFI_NAME"
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"
@@ -91,57 +92,63 @@ int run_network_handshake(void) {
 }
 
 int main(void) {
-    struct sensor_value temp, press, hum;
+    struct sensor_value temp = {0};
+    struct sensor_value press = {0};
+    struct sensor_value hum = {0};
     char json_buffer[256];
+    bool bme280_ok = false;
 
     boot_sequence++;
+
+    last_wind_pulse_timestamp = 0;
 
     gpio_pin_configure_dt(&wind_gpio, GPIO_INPUT | GPIO_PULL_UP);
     gpio_pin_interrupt_configure_dt(&wind_gpio, GPIO_INT_EDGE_TO_ACTIVE);
     gpio_init_callback(&wind_cb_data, wind_pulse_isr, BIT(wind_gpio.pin));
     gpio_add_callback(wind_gpio.port, &wind_cb_data);
 
-    if (device_is_ready(bme280_dev)) {
-        sensor_sample_fetch(bme280_dev);
+    if (device_is_ready(bme280_dev) && sensor_sample_fetch(bme280_dev) == 0) {
         sensor_channel_get(bme280_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp);
         sensor_channel_get(bme280_dev, SENSOR_CHAN_PRESS, &press);
         sensor_channel_get(bme280_dev, SENSOR_CHAN_HUMIDITY, &hum);
+        bme280_ok = true;
     }
 
     if (boot_sequence == 1) {
         calibrate_as3935_antenna();
     }
 
-    struct i2c_dt_spec as3935_spec = {
-        .bus = i2c_bus,
-        .addr = 0x03
-    };
+    if (device_is_ready(i2c_bus)) {
+        struct i2c_dt_spec as3935_spec = {
+            .bus = i2c_bus,
+            .addr = 0x03
+        };
 
-    uint8_t int_reg_addr = 0x03;
-    uint8_t int_val = 0x00;
+        uint8_t int_reg_addr = 0x03;
+        uint8_t int_val = 0x00;
 
-    if (i2c_write_read_dt(&as3935_spec, &int_reg_addr, 1, &int_val, 1) == 0) {
-        if ((int_val & 0x08) == 0x08) {
-            total_lightning_strikes++;
+        if (i2c_write_read_dt(&as3935_spec, &int_reg_addr, 1, &int_val, 1) == 0) {
+            if ((int_val & 0x08) == 0x08) {
+                total_lightning_strikes++;
 
-            uint8_t dist_reg = 0x07;
-            uint8_t dist_val = 0x00;
-            if (i2c_write_read_dt(&as3935_spec, &dist_reg, 1, &dist_val, 1) == 0) {
-                last_lightning_distance_km = dist_val & 0x3F;
+                uint8_t dist_reg = 0x07;
+                uint8_t dist_val = 0x00;
+                if (i2c_write_read_dt(&as3935_spec, &dist_reg, 1, &dist_val, 1) == 0) {
+                    last_lightning_distance_km = dist_val & 0x3F;
+                }
             }
         }
     }
 
     float rps = (float)accumulated_wind_pulses / (float)SLEEP_TIME_SEC;
     float wind_kmh = (rps * 2.5) * 1.60934;
-    accumulated_wind_pulses = 0;
 
     snprintf(json_buffer, sizeof(json_buffer),
              "{\"id\":\"storm_station_01\",\"boot\":%u,\"temp\":%.2f,\"press\":%.1f,\"hum\":%.1f,\"wind\":%.2f,\"lt_count\":%u,\"lt_dist\":%u}",
              boot_sequence,
-             sensor_value_to_double(&temp),
-             sensor_value_to_double(&press) * 10.0,
-             sensor_value_to_double(&hum),
+             bme280_ok ? sensor_value_to_double(&temp) : 0.0,
+             bme280_ok ? sensor_value_to_double(&press) * 10.0 : 0.0,
+             bme280_ok ? sensor_value_to_double(&hum) : 0.0,
              wind_kmh,
              total_lightning_strikes,
              last_lightning_distance_km);
@@ -158,6 +165,8 @@ int main(void) {
             close(sock);
         }
     }
+
+    accumulated_wind_pulses = 0;
 
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_TIME_SEC * 1000000);
     pm_state_force(0, &(struct pm_state_info){.state = PM_STATE_SOFT_OFF});
