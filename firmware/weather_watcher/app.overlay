@@ -1,0 +1,28 @@
+&i2c0 {
+    status = "okay";
+    clock-frequency = <I2C_BITRATE_STANDARD>;
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-names = "default";
+
+    bme280: bme280@76 {
+        compatible = "bosch,bme280";
+        reg = <0x76>;
+    };
+
+    as3935: as3935@03 {
+        compatible = "ams,as3935";
+        reg = <0x03>;
+        irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+        status = "okay";
+    };
+};
+
+&pinctrl {
+    i2c0_default: i2c0_default {
+        group1 {
+            pinmux = <I2C0_SDA_GPIO21>,
+                     <I2C0_SCL_GPIO22>;
+            bias-pull-up;
+        };
+    };
+};
