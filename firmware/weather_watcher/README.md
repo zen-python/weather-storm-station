@@ -2,26 +2,45 @@
 
 ESP32-E firmware for the weather station. Reads BME280 (temp/humidity/pressure), AS3935 (lightning), and Inspeed WS2R (wind speed) sensors, transmits UDP JSON every 15 minutes via Wi-Fi, then enters deep sleep.
 
-## Prerequisites
+## Build (Docker — Recommended)
 
-- [Zephyr RTOS SDK](https://github.com/zephyrproject-rtos/sdk-ng/releases) (v0.17.0+)
-  ```bash
-  # Download and install
-  wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.0/zephyr-sdk-0.17.0_linux-aarch64_minimal.tar.xz
-  tar xf zephyr-sdk-0.17.0_linux-aarch64_minimal.tar.xz -C /opt
-  cd /opt/zephyr-sdk-0.17.0
-  ./setup.sh -t xtensa-espressif_esp32_zephyr-elf -h
-  ```
-- Zephyr workspace at `~/zephyrproject` with `west` initialized
-- Python virtual environment for Zephyr
-
-## Workspace Setup
-
-Symlink this app into your Zephyr workspace:
+Uses the official Zephyr Docker image with all toolchains pre-installed.
 
 ```bash
-mkdir -p ~/zephyrproject/apps
-ln -sf $(pwd) ~/zephyrproject/apps/weather_watcher
+# 1. Set your Wi-Fi credentials
+vim src/main.c   # change WIFI_SSID / WIFI_PASS
+
+# 2. Pull the image (once, ~3GB)
+docker pull ghcr.io/zephyrproject-rtos/zephyr-build:main
+
+# 3. Build
+docker run --rm \
+  -v "$(pwd):/app" \
+  ghcr.io/zephyrproject-rtos/zephyr-build:main \
+  west build -b esp32_devkitc/esp32/procpu -p always -d build /app
+
+# 4. Flash (on host, with ESP32 connected via USB)
+west flash -d build
+```
+
+Or use the convenience script:
+
+```bash
+./scripts/docker-build.sh
+```
+
+## Build (Local — Advanced)
+
+Requires Zephyr SDK v1.0+, west workspace, and all module dependencies.
+
+See [install-zephyr-sdk.sh](../../scripts/install-zephyr-sdk.sh) for SDK setup.
+
+```bash
+source ~/zephyrproject/.venv/bin/activate
+cd ~/zephyrproject
+west build -b esp32_devkitc/esp32/procpu -p always \
+  -d build/weather_watcher apps/weather_watcher
+west flash -d build/weather_watcher
 ```
 
 ## Wiring
@@ -35,20 +54,15 @@ ln -sf $(pwd) ~/zephyrproject/apps/weather_watcher
 
 See [HARDWARE.md](../../../HARDWARE.md) for the full wiring diagram.
 
-## Build & Flash
+## Configuration
 
-1. Set Wi-Fi credentials in `src/main.c` (`WIFI_SSID` / `WIFI_PASS`)
-2. Verify static IP (`CONFIG_NET_CONFIG_MY_IPV4_ADDR` in `prj.conf`) and server IP (`SERVER_IP` in `main.c`)
-3. Build and flash from the Zephyr workspace root:
-
-```bash
-source ~/zephyrproject/.venv/bin/activate
-cd ~/zephyrproject
-west build -b esp32_devkitc/esp32/procpu -p always -d build/weather_watcher apps/weather_watcher
-west flash -d build/weather_watcher
-```
-
-The ESP32 will wake every 15 minutes, read sensors, transmit to `192.168.0.200:5000`, and return to deep sleep.
+| File | Setting | Default |
+|---|---|---|
+| `src/main.c` | `WIFI_SSID` | `YOUR_HOME_WIFI_NAME` |
+| `src/main.c` | `WIFI_PASS` | `YOUR_WIFI_PASSWORD` |
+| `src/main.c` | `SERVER_IP` | `192.168.0.200` |
+| `prj.conf` | ESP32 static IP | `192.168.0.199` |
+| `prj.conf` | Netmask / Gateway | `255.255.255.0` / `192.168.0.1` |
 
 ## Power
 

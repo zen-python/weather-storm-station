@@ -9,9 +9,9 @@
         reg = <0x76>;
     };
 
-    as3935: as3935@03 {
+    as3935: as3935@3 {
         compatible = "ams,as3935";
-        reg = <0x03>;
+        reg = <0x3>;
         irq-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
         status = "okay";
     };
