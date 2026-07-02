@@ -1,0 +1,10 @@
+# Zephyr build artifacts
+firmware/weather_watcher/build/
+
+# Docker volumes
+backend/grafana/grafana-data/
+backend/influxdb-storage/
+
+# OS files
+.DS_Store
+Thumbs.db
