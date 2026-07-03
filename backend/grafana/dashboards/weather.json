@@ -488,7 +488,7 @@
             "properties": [{"id": "displayName", "value": "Time"}]
           },
           {
-            "matcher": {"id": "byName", "options": "alert_message"},
+            "matcher": {"id": "byName", "options": "message"},
             "properties": [{"id": "displayName", "value": "Alert"}, {"id": "custom.cellOptions", "value": {"type": "auto"}}]
           },
           {
