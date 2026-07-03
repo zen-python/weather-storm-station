@@ -23,6 +23,7 @@ services:
   telegraf:
     image: telegraf:latest
     container_name: telegraf_ingestion
+    command: telegraf --non-strict-env-handling
     ports:
       - "5000:5000/udp"
     volumes:
